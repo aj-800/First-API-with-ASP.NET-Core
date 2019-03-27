@@ -14,7 +14,15 @@ namespace CityInfo.Api
     {
         public static void Main(string[] args)
         {
-            CreateWebHostBuilder(args).Build().Run();
+            try
+            {
+                CreateWebHostBuilder(args).Build().Run();
+            }
+            catch(Exception ex)
+            {
+                var t = ex.ToString();
+            }
+            
         }
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
