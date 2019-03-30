@@ -1,4 +1,5 @@
-﻿using CityInfo.Api.Models;
+﻿using AutoMapper;
+using CityInfo.Api.Models;
 using CityInfo.Api.Services;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
@@ -31,17 +32,6 @@ namespace CityInfo.Api.Controllers
         {
             try
             {
-                //var city = CitiesDataStore.Current.Cities.FirstOrDefault(c => c.Id == cityId);
-
-                //if (city == null)
-                //{
-                //    _logger.LogInformation($"City with {cityId} wasn't found when accessing points of interest.");
-                //    return NotFound();
-                //}
-
-                //return Ok(city.PointsOfInterest);
-
-
                 if (!_cityInfoRepository.CityExists(cityId))
                 {
                     _logger.LogInformation($"City with {cityId} wasn't found when accessing points of interest.");
@@ -49,16 +39,7 @@ namespace CityInfo.Api.Controllers
                 }
 
                 var pointsOfInterest = _cityInfoRepository.GetPointsOfInterestForCity(cityId);
-                var result = new List<PointOfInterestDto>();
-                foreach(var poi in pointsOfInterest)
-                {
-                    result.Add(new PointOfInterestDto()
-                    {
-                        Id = poi.Id,
-                        Name = poi.Name,
-                        Description = poi.Description,
-                    });
-                }
+                var result = Mapper.Map<IEnumerable<PointOfInterestDto>>(pointsOfInterest);
 
                 return Ok(result);
             }
@@ -74,21 +55,6 @@ namespace CityInfo.Api.Controllers
         [HttpGet("{cityId}/pointsofInterest/{pointOfInterestId}", Name = "GetPointOfInterest")]
         public IActionResult GetPointOfInterest(int cityId, int pointOfInterestId)
         {
-            //var city = CitiesDataStore.Current.Cities.FirstOrDefault(c => c.Id == cityId);
-
-            //if (city == null)
-            //{
-            //    return NotFound();
-            //}
-
-            //var pointOfInterest = city.PointsOfInterest.FirstOrDefault(p => p.Id == pointOfInterestId);
-
-            //if (pointOfInterest == null)
-            //{
-            //    return NotFound();
-            //}
-
-            //return Ok(pointOfInterest);
 
             if (!_cityInfoRepository.CityExists(cityId))
             {
@@ -102,13 +68,7 @@ namespace CityInfo.Api.Controllers
                 return NotFound();
             }
 
-            var result = new PointOfInterestDto()
-            {
-                Id = poi.Id,
-                Name = poi.Name,
-                Description = poi.Description,
-            };
-
+            var result = Mapper.Map<PointOfInterestDto>(poi);
             return Ok(result);
 
         }
@@ -131,26 +91,22 @@ namespace CityInfo.Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            var city = CitiesDataStore.Current.Cities.FirstOrDefault(c => c.Id == cityId);
-
-            if (city == null)
+            if (!_cityInfoRepository.CityExists(cityId))
             {
                 return NotFound();
             }
 
-            // need to be modified
-            var maxPointOfInterestId = CitiesDataStore.Current.Cities.SelectMany(c => c.PointsOfInterest).Max(p => p.Id);
+            var newPoi = Mapper.Map<Entities.PointOfInterest>(pointOfInterest);
+            _cityInfoRepository.AddPointOfInterestForCity(cityId, newPoi);
 
-            var newPointOfInterest = new PointOfInterestDto()
+            if (!_cityInfoRepository.Save())
             {
-                Id = ++maxPointOfInterestId,
-                Name = pointOfInterest.Name,
-                Description = pointOfInterest.Description
-            };
+                return StatusCode(500, "A problem happened while handling your request.");
+            }
 
-            city.PointsOfInterest.Add(newPointOfInterest);
+            var createdPoi = Mapper.Map<Models.PointOfInterestDto>(newPoi);
 
-            return CreatedAtRoute("GetPointOfInterest", new { cityId = cityId, pointOfInterestId = newPointOfInterest.Id }, newPointOfInterest);
+            return CreatedAtRoute("GetPointOfInterest", new { cityId = cityId, pointOfInterestId = createdPoi.Id }, createdPoi);
         }
 
         [HttpPut("{cityId}/pointsofinterest/{pointOfInterestId}")]
@@ -171,22 +127,23 @@ namespace CityInfo.Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            var city = CitiesDataStore.Current.Cities.FirstOrDefault(c => c.Id == cityId);
-
-            if (city == null)
+            if (!_cityInfoRepository.CityExists(cityId))
             {
                 return NotFound();
             }
 
-            var pointOfInterestFromStore = city.PointsOfInterest.FirstOrDefault(p => p.Id == pointOfInterestId);
-
-            if (pointOfInterestFromStore == null)
+            var pointOfInterestEntity = _cityInfoRepository.GetPointOfInterestForCity(cityId, pointOfInterestId);
+            if (pointOfInterestEntity == null)
             {
                 return NotFound();
             }
 
-            pointOfInterestFromStore.Name = pointOfInterest.Name;
-            pointOfInterestFromStore.Description = pointOfInterest.Description;
+            Mapper.Map(pointOfInterest, pointOfInterestEntity);
+
+            if (!_cityInfoRepository.Save())
+            {
+                return StatusCode(500, "A problem happened while handling your request.");
+            }
 
             return NoContent();
 
@@ -200,23 +157,18 @@ namespace CityInfo.Api.Controllers
                 return BadRequest();
             }
 
-            var city = CitiesDataStore.Current.Cities.FirstOrDefault(c => c.Id == cityId);
-            if (city == null)
+            if (!_cityInfoRepository.CityExists(cityId))
             {
                 return NotFound();
             }
 
-            var pointOfInterestFromStore = city.PointsOfInterest.FirstOrDefault(p => p.Id == pointOfInterestId);
-            if (pointOfInterestFromStore == null)
+            var pointOfInterestEntity = _cityInfoRepository.GetPointOfInterestForCity(cityId, pointOfInterestId);
+            if (pointOfInterestEntity == null)
             {
                 return NotFound();
             }
 
-            var pointOfInterestToPatch = new PointOfInterestForUpdateDto()
-            {
-                Name = pointOfInterestFromStore.Name,
-                Description = pointOfInterestFromStore.Description
-            };
+            var pointOfInterestToPatch = Mapper.Map<PointOfInterestForUpdateDto>(pointOfInterestEntity);
 
             patchDoc.ApplyTo(pointOfInterestToPatch, ModelState);
             if (!ModelState.IsValid)
@@ -236,9 +188,13 @@ namespace CityInfo.Api.Controllers
                 return BadRequest(ModelState);
             }
 
+            Mapper.Map(pointOfInterestToPatch, pointOfInterestEntity);
 
-            pointOfInterestFromStore.Name = pointOfInterestToPatch.Name;
-            pointOfInterestFromStore.Description = pointOfInterestToPatch.Description;
+            if (!_cityInfoRepository.Save())
+            {
+                return StatusCode(500, "A problem happened while handling your request.");
+            }
+
 
             return NoContent();
 
@@ -248,21 +204,25 @@ namespace CityInfo.Api.Controllers
         public IActionResult DeletePointOfInterest(int cityId, int pointOfInterestId)
         {
 
-            var city = CitiesDataStore.Current.Cities.FirstOrDefault(c => c.Id == cityId);
-            if (city == null)
+           if(!_cityInfoRepository.CityExists(cityId))
             {
                 return NotFound();
             }
 
-            var pointOfInterestFromStore = city.PointsOfInterest.FirstOrDefault(p => p.Id == pointOfInterestId);
-            if (pointOfInterestFromStore == null)
+            var pointOfInterestEntity = _cityInfoRepository.GetPointOfInterestForCity(cityId, pointOfInterestId);
+            if (pointOfInterestEntity == null)
             {
                 return NotFound();
             }
 
-            city.PointsOfInterest.Remove(pointOfInterestFromStore);
+            _cityInfoRepository.DeletePointOfInterest(pointOfInterestEntity);
 
-            _mailService.Send("Point of interest deleted.", $"Point of interest {pointOfInterestFromStore.Name} with id {pointOfInterestFromStore.Id} was deleted.");
+            if (!_cityInfoRepository.Save())
+            {
+                return StatusCode(500, "A problem happened while handling your request.");
+            }
+
+            _mailService.Send("Point of interest deleted.", $"Point of interest {pointOfInterestEntity.Name} with id {pointOfInterestEntity.Id} was deleted.");
 
             return NoContent();
 
