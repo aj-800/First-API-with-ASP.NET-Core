@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Serialization;
 using NLog.Extensions.Logging;
 using AutoMapper;
+using Microsoft.AspNet.OData.Extensions;
 
 namespace CityInfo.Api
 {
@@ -56,6 +57,8 @@ namespace CityInfo.Api
             string connectionString = Configuration["connectionStrings:cityInfoDbConnectionString"];
             services.AddDbContext<CityInfoContext>(o => o.UseSqlServer(connectionString));
 
+            services.AddOData();
+
             services.AddScoped<ICityInfoRepository, CityInfoRepository>();
         }
 
@@ -92,7 +95,11 @@ namespace CityInfo.Api
                 cfg.CreateMap<Entities.PointOfInterest, Models.PointOfInterestForUpdateDto>();
             });
 
-            app.UseMvc();
+            app.UseMvc(routeBuilder =>
+            {
+                routeBuilder.EnableDependencyInjection();
+                routeBuilder.Expand().Select().OrderBy().Count();
+            });
 
             //app.Run(async (context) =>
             //{

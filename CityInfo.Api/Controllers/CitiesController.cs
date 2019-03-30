@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using CityInfo.Api.Models;
 using CityInfo.Api.Services;
+using Microsoft.AspNet.OData;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ namespace CityInfo.Api.Controllers
         }
 
         [HttpGet()]
+        [EnableQuery()]
         public IActionResult GetCities()
         {
             //return Ok(CitiesDataStore.Current.Cities);
